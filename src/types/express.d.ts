@@ -1,9 +1,13 @@
-import { JwtPayload } from "./user.js";
+import type {Role} from "./user.js";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: JwtPayload;
+      user?: {
+        userId: number;
+        username: string;
+        role: Role;
+      };
     }
   }
 }

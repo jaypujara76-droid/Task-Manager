@@ -1,153 +1,293 @@
-import { Router, type Request, type Response } from "express";
-import {
-  CreateTaskBody,
-  Task,
-  TaskParams,
-  UpdateTaskBody,
-  PatchTaskBody,
-} from "../types/task.js";
+import { Router } from "express";
+
 import { createTaskSchema, updateTaskSchema } from "../schemas/task.schema.js";
+
 import { validateBody } from "../middlewares/validate.middleware.js";
 import { NotFoundError } from "../errors/NotFoundError.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
-import { authorize } from "../middlewares/authorize.middleware.js";
-import { checkTaskOwnership } from "../middlewares/checkTaskOwnership.middleware.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+
+import prisma from "../lib/prisma.js";
 
 const router = Router();
+
 router.use(authenticate);
 
-let tasks: Task[] = [
-  {
-    id: 1,
-    title: "Learn Node JS",
-    description: "understand Node.js fundamentals",
-    completed: false,
-    ownerId: 1,
-  },
-  {
-    id: 2,
-    title: "learn Express",
-    description: "Build Rest API with express",
-    completed: false,
-    ownerId: 2,
-  },
-];
+/*
+|--------------------------------------------------------------------------
+| GET /tasks
+|--------------------------------------------------------------------------
+| Admin  -> all tasks
+| User   -> only own tasks
+|--------------------------------------------------------------------------
+*/
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const currentUser = req.user!;
+
+    const tasks = await prisma.task.findMany({
+      where:
+        currentUser.role === "admin"
+          ? {}
+          : {
+              userId: currentUser.userId,
+            },
+    });
+
+    const response = tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? "",
+      completed: task.completed,
+      ownerId: task.userId,
+    }));
+
+    res.status(200).json(response);
+  }),
+);
+
+/*
+|--------------------------------------------------------------------------
+| GET /tasks/:id
+|--------------------------------------------------------------------------
+| Admin  -> can access any task
+| User   -> can access only own task
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/:id",
-  checkTaskOwnership,
-  (req: Request<TaskParams>, res: Response<Task>) => {
+  asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
+    const currentUser = req.user!;
 
-    const task = tasks.find((task) => task.id === id);
+    const task = await prisma.task.findFirst({
+      where:
+        currentUser.role === "admin"
+          ? {
+              id,
+            }
+          : {
+              id,
+              userId: currentUser.userId,
+            },
+    });
 
     if (!task) {
       throw new NotFoundError("Task not found");
     }
 
-    res.json(task);
-  },
+    const response = {
+      id: task.id,
+      title: task.title,
+      description: task.description ?? "",
+      completed: task.completed,
+      ownerId: task.userId,
+    };
+
+    res.status(200).json(response);
+  }),
 );
+
+/*
+|--------------------------------------------------------------------------
+| POST /tasks
+|--------------------------------------------------------------------------
+| Task ownership comes from authenticated user.
+|--------------------------------------------------------------------------
+*/
+
 router.post(
   "/",
   validateBody(createTaskSchema),
-  (req: Request<{}, Task, CreateTaskBody>, res: Response<Task>) => {
-    const newTask: Task = {
-      id: tasks.length + 1,
-      title: req.body.title,
-      description: req.body.description,
-      completed: false,
-      ownerId: req.user!.userId,
-    };
-    tasks.push(newTask);
+  asyncHandler(async (req, res) => {
+    const currentUser = req.user!;
 
-    res.status(201).json(newTask);
-  },
+    const newTask = await prisma.task.create({
+      data: {
+        title: req.body.title,
+        description: req.body.description,
+        completed: false,
+
+        userId: currentUser.userId,
+      },
+    });
+
+    const response = {
+      id: newTask.id,
+      title: newTask.title,
+      description: newTask.description ?? "",
+      completed: newTask.completed,
+      ownerId: newTask.userId,
+    };
+
+    res.status(201).json(response);
+  }),
 );
 
-router.get("/", (req: Request, res: Response<Task[]>) => {
-  const currentUser = req.user!;
+/*
+|--------------------------------------------------------------------------
+| PUT /tasks/:id
+|--------------------------------------------------------------------------
+| Admin  -> can update any task
+| User   -> can update only own task
+|--------------------------------------------------------------------------
+*/
 
-  if (currentUser.role === "admin") {
-    return res.json(tasks);
-  }
-
-  const userTasks = tasks.filter((task) => task.ownerId === currentUser.userId);
-
-  res.json(userTasks);
-});
 router.put(
   "/:id",
   validateBody(updateTaskSchema),
-  checkTaskOwnership,
-  (req: Request<TaskParams, Task, UpdateTaskBody>, res: Response<Task>) => {
+  asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
+    const currentUser = req.user!;
 
-    const taskIndex = tasks.findIndex((task) => task.id === id);
+    const result = await prisma.task.updateMany({
+      where:
+        currentUser.role === "admin"
+          ? {
+              id,
+            }
+          : {
+              id,
+              userId: currentUser.userId,
+            },
 
-    if (taskIndex === -1) {
+      data: {
+        title: req.body.title,
+        description: req.body.description,
+        completed: req.body.completed,
+      },
+    });
+
+    if (result.count === 0) {
       throw new NotFoundError("Task not found");
     }
 
-    const updatedTask: Task = {
-      id,
-      title: req.body.title,
-      description: req.body.description,
-      completed: req.body.completed,
-      ownerId: tasks[taskIndex].ownerId,
+    const updatedTask = await prisma.task.findFirst({
+      where: {
+        id,
+      },
+    });
+
+    if (!updatedTask) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const response = {
+      id: updatedTask.id,
+      title: updatedTask.title,
+      description: updatedTask.description ?? "",
+      completed: updatedTask.completed,
+      ownerId: updatedTask.userId,
     };
 
-    tasks[taskIndex] = updatedTask;
-
-    res.json(updatedTask);
-  },
+    res.status(200).json(response);
+  }),
 );
+
+/*
+|--------------------------------------------------------------------------
+| PATCH /tasks/:id
+|--------------------------------------------------------------------------
+| Admin  -> can update any task
+| User   -> can update only own task
+|--------------------------------------------------------------------------
+*/
+
+router.patch(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const currentUser = req.user!;
+
+    const result = await prisma.task.updateMany({
+      where:
+        currentUser.role === "admin"
+          ? {
+              id,
+            }
+          : {
+              id,
+              userId: currentUser.userId,
+            },
+
+      data: {
+        ...(req.body.title !== undefined && {
+          title: req.body.title,
+        }),
+
+        ...(req.body.description !== undefined && {
+          description: req.body.description,
+        }),
+
+        ...(req.body.completed !== undefined && {
+          completed: req.body.completed,
+        }),
+      },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const updatedTask = await prisma.task.findFirst({
+      where: {
+        id,
+      },
+    });
+
+    if (!updatedTask) {
+      throw new NotFoundError("Task not found");
+    }
+
+    const response = {
+      id: updatedTask.id,
+      title: updatedTask.title,
+      description: updatedTask.description ?? "",
+      completed: updatedTask.completed,
+      ownerId: updatedTask.userId,
+    };
+
+    res.status(200).json(response);
+  }),
+);
+
+/*
+|--------------------------------------------------------------------------
+| DELETE /tasks/:id
+|--------------------------------------------------------------------------
+| Admin  -> can delete any task
+| User   -> can delete only own task
+|--------------------------------------------------------------------------
+*/
 
 router.delete(
   "/:id",
-  checkTaskOwnership,
-  (req: Request<TaskParams>, res: Response<Task>) => {
+  asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
+    const currentUser = req.user!;
 
-    const taskIndex = tasks.findIndex((task) => task.id === id);
+    const result = await prisma.task.deleteMany({
+      where:
+        currentUser.role === "admin"
+          ? {
+              id,
+            }
+          : {
+              id,
+              userId: currentUser.userId,
+            },
+    });
 
-    if (taskIndex === -1) {
+    if (result.count === 0) {
       throw new NotFoundError("Task not found");
     }
 
-    const deletedTask = tasks[taskIndex];
-
-    tasks.splice(taskIndex, 1);
-
-    res.json(deletedTask);
-  },
-);
-
-// PATCH /tasks/:id
-router.patch(
-  "/:id",
-  checkTaskOwnership,
-  (req: Request<TaskParams, Task, UpdateTaskBody>, res: Response<Task>) => {
-    const id = Number(req.params.id);
-
-    const taskIndex = tasks.findIndex((task) => task.id === id);
-
-    if (taskIndex === -1) {
-      throw new NotFoundError("Task not found");
-    }
-
-    const updatedTask: Task = {
-      ...tasks[taskIndex],
-      ...req.body,
-      id,
-      ownerId: tasks[taskIndex].ownerId,
-    };
-
-    tasks[taskIndex] = updatedTask;
-
-    res.json(updatedTask);
-  },
+    res.status(200).json({
+      message: "Task deleted successfully",
+    });
+  }),
 );
 
 export default router;

@@ -12,3 +12,4 @@ export interface JwtPayload {
   username: string;
   role: Role;
 }
+  

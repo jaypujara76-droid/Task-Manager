@@ -9,7 +9,6 @@ export const authorize = (...roles: Role[]) => {
         "You do not have permission to perform this action",
       );
     }
-
     next();
   };
-};
+};                                           
