@@ -1,4 +1,3 @@
-import type { ParamsDictionary } from "express-serve-static-core";
 
 export interface Task {
   id: number;
@@ -13,7 +12,7 @@ export interface CreateTaskBody {
   description: string;
 }
 
-export interface TaskParams extends ParamsDictionary {
+export interface TaskParams  {
   id: string;
 }
 
