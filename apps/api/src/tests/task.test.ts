@@ -1,27 +1,46 @@
-import { beforeAll, describe, expect, it } from "vitest";
-
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import jwt from "jsonwebtoken";
 import request from "supertest";
-import app from "../app.js";
 
-let userToken: string;
-let adminToken: string;
+const prismaMocks = vi.hoisted(() => ({
+  findUserUnique: vi.fn(),
+  findTasks: vi.fn(),
+}));
 
-beforeAll(async () => {
-  process.env.JWT_SECRET = "test-secret";
+vi.mock("../lib/prisma.js", () => ({
+  default: {
+    user: {
+      findUnique: prismaMocks.findUserUnique,
+    },
+    task: {
+      findMany: prismaMocks.findTasks,
+    },
+  },
+}));
 
-  const userResponse = await request(app).post("/login").send({
-    username: "jay",
-    password: "123456",
-  });
+process.env.JWT_SECRET = "test-secret";
 
-  userToken = userResponse.body.token;
+const app = (await import("../app.js")).default;
+const userToken = jwt.sign(
+  { userId: 1, username: "jay", role: "user" },
+  process.env.JWT_SECRET,
+);
+const adminToken = jwt.sign(
+  { userId: 2, username: "admin", role: "admin" },
+  process.env.JWT_SECRET,
+);
 
-  const adminResponse = await request(app).post("/login").send({
-    username: "admin",
-    password: "admin123",
-  });
+const users = [
+  { id: 1, username: "jay", role: "user" },
+  { id: 2, username: "admin", role: "admin" },
+];
 
-  adminToken = adminResponse.body.token;
+beforeEach(() => {
+  prismaMocks.findUserUnique.mockImplementation(
+    async ({ where }: { where: { id: number } }) =>
+      users.find((user) => user.id === where.id) ?? null,
+  );
+  prismaMocks.findTasks.mockResolvedValue([]);
 });
 
 describe("Task API Authentication", () => {
@@ -45,6 +64,7 @@ describe("Task API Authentication", () => {
       .set("Authorization", `Bearer ${userToken}`);
 
     expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
   });
 
   it("allows an authenticated admin", async () => {
@@ -53,5 +73,6 @@ describe("Task API Authentication", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
   });
 });

@@ -1,8 +1,16 @@
-import "dotenv/config";
-import app from "./app.js";
+import dotenv from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PORT = 3000;
+const currentDir = dirname(fileURLToPath(import.meta.url));
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+dotenv.config({
+  path: resolve(currentDir, "../../../.env"),
+});
+
+const { default: app } = await import("./app.js");
+const port = Number(process.env.PORT ?? 3000);
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
 });

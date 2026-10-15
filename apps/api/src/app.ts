@@ -1,11 +1,14 @@
+
 import express from "express";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+
 import healthRouter from "./routes/health.routes.js";
 import taskRouter from "./routes/task.routes.js";
 import authRouter from "./routes/auth.routes.js";
+
 import { logger } from "./middlewares/logger.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
-import rateLimit from "express-rate-limit";
-import cors from "cors";
 
 const app = express();
 
@@ -14,21 +17,23 @@ const loginLimiter = rateLimit({
   limit: 10,
 });
 
+// Middleware
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+  }),
+);
+
 app.use(express.json());
+app.use(logger);
 app.use("/login", loginLimiter);
 
-app.use(logger);
-
+// Routes
 app.use(healthRouter);
 app.use(authRouter);
 app.use("/tasks", taskRouter);
 
+// Error handling (after routes)
 app.use(errorHandler);
-
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-  }),
-);
 
 export default app;

@@ -165,11 +165,14 @@ router.put(
     }
 
     const updatedTask = await prisma.task.findFirst({
-      where: {
-        id,
-      },
+      where:
+        currentUser.role === "admin"
+          ? { id }
+          : {
+              id,
+              userId: currentUser.userId,
+            },
     });
-
     if (!updatedTask) {
       throw new NotFoundError("Task not found");
     }

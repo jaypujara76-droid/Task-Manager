@@ -4,4 +4,4 @@ dist/
 .env.*
 !.env.example
 npm-debug.log*
-/src/generated/prisma
+/apps/api/src/generated/prisma/
