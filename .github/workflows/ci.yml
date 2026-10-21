@@ -5,7 +5,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  quality-gate:
+    name: Quality Gate
     runs-on: ubuntu-latest
 
     services:
@@ -30,15 +31,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.34.7
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.7
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -49,8 +52,20 @@ jobs:
       - name: Apply database migrations
         run: pnpm --filter @task-manager/api exec prisma migrate deploy --config prisma7.config.ts
 
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Typecheck all packages
+        run: pnpm typecheck
+
       - name: Run API tests
-        run: pnpm --filter @task-manager/api test
+        run: pnpm test
 
       - name: Build API
-        run: pnpm --filter @task-manager/api build
+        run: pnpm build
+
+      - name: Lint frontend
+        run: pnpm --filter web lint
+
+      - name: Build frontend
+        run: pnpm --filter web build

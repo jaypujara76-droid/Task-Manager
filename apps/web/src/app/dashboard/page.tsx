@@ -84,7 +84,11 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    void loadTasks();
+    const timer = window.setTimeout(() => {
+      void loadTasks();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadTasks]);
 
   async function handleAddTask(event: React.FormEvent<HTMLFormElement>) {
