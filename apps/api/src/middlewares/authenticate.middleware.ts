@@ -10,11 +10,23 @@ interface JwtPayload {
   role: Role;
 }
 
-export async function authenticate(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+function isJwtPayload(value: unknown): value is JwtPayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  if (!("userId" in value) || !("username" in value) || !("role" in value)) {
+    return false;
+  }
+
+  return (
+    typeof value.userId === "number" &&
+    typeof value.username === "string" &&
+    (value.role === "admin" || value.role === "user")
+  );
+}
+
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
 
@@ -24,11 +36,32 @@ export async function authenticate(
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.slice("Bearer ".length).trim();
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+    if (!token) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
-    // Look up the real user in PostgreSQL
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      console.error("JWT_SECRET is not configured");
+
+      return res.status(500).json({
+        message: "Internal Server Error",
+      });
+    }
+
+    const decoded: unknown = jwt.verify(token, secret);
+
+    if (!isJwtPayload(decoded)) {
+      return res.status(401).json({
+        message: "Invalid token payload",
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: {
         id: decoded.userId,
@@ -41,15 +74,14 @@ export async function authenticate(
       });
     }
 
-    // Attach real DB user to request
     req.user = {
       userId: user.id,
       username: user.username,
       role: user.role as Role,
     };
 
-    next();
-  } catch (error) {
+    return next();
+  } catch {
     return res.status(401).json({
       message: "Invalid or expired token",
     });

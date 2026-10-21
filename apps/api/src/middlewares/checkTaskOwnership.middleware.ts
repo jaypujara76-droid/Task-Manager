@@ -4,11 +4,7 @@ import prisma from "../lib/prisma.js";
 import { NotFoundError } from "../errors/NotFoundError.js";
 import { ForbiddenError } from "../errors/ForbiddenError.js";
 
-export async function checkTaskOwnership(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function checkTaskOwnership(req: Request, res: Response, next: NextFunction) {
   try {
     const taskId = Number(req.params.id);
 
@@ -19,7 +15,6 @@ export async function checkTaskOwnership(
       },
     });
 
-    
     if (!task) {
       throw new NotFoundError("Task not found");
     }

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -39,9 +38,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [title, setTitle] = useState("");
 
-  const completedTasks = tasks.filter(
-    (task) => task.status === "Completed"
-  ).length;
+  const completedTasks = tasks.filter((task) => task.status === "Completed").length;
 
   function addTask() {
     if (!title.trim()) return;
@@ -59,39 +56,26 @@ export default function Home() {
   }
 
   function deleteTask(id: number) {
-    setTasks((previousTasks) =>
-      previousTasks.filter((task) => task.id !== id)
-    );
+    setTasks((previousTasks) => previousTasks.filter((task) => task.id !== id));
   }
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto max-w-6xl px-6 py-10">
         <header className="mb-8">
-          <p className="text-sm font-semibold text-indigo-600">
-            TASK MANAGER
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">
-            My Dashboard
-          </h1>
-          <p className="mt-2 text-slate-500">
-            Organize your work and keep track of your progress.
-          </p>
+          <p className="text-sm font-semibold text-indigo-600">TASK MANAGER</p>
+          <h1 className="mt-2 text-3xl font-bold">Dashboard</h1>
+          <p className="mt-2 text-slate-500">Organize your work and keep track of your progress.</p>
         </header>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <SummaryCard label="Total Tasks" value={tasks.length} />
           <SummaryCard label="Completed" value={completedTasks} />
-          <SummaryCard
-            label="Remaining"
-            value={tasks.length - completedTasks}
-          />
+          <SummaryCard label="Remaining" value={tasks.length - completedTasks} />
         </section>
 
         <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">
-            Create a Task
-          </h2>
+          <h2 className="mb-4 text-lg font-semibold">Create a Task</h2>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
@@ -125,9 +109,7 @@ export default function Home() {
               >
                 <div>
                   <h3 className="font-semibold">{task.title}</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {task.description}
-                  </p>
+                  <p className="mt-1 text-sm text-slate-500">{task.description}</p>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
                     <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
                       {task.status}
@@ -160,13 +142,7 @@ export default function Home() {
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-sm text-slate-500">{label}</p>

@@ -21,10 +21,7 @@ vi.mock("../lib/prisma.js", () => ({
 process.env.JWT_SECRET = "test-secret";
 
 const app = (await import("../app.js")).default;
-const userToken = jwt.sign(
-  { userId: 1, username: "jay", role: "user" },
-  process.env.JWT_SECRET,
-);
+const userToken = jwt.sign({ userId: 1, username: "jay", role: "user" }, process.env.JWT_SECRET);
 const adminToken = jwt.sign(
   { userId: 2, username: "admin", role: "admin" },
   process.env.JWT_SECRET,
@@ -51,26 +48,20 @@ describe("Task API Authentication", () => {
   });
 
   it("rejects an invalid token", async () => {
-    const response = await request(app)
-      .get("/tasks")
-      .set("Authorization", "Bearer invalid-token");
+    const response = await request(app).get("/tasks").set("Authorization", "Bearer invalid-token");
 
     expect(response.status).toBe(401);
   });
 
   it("allows an authenticated user", async () => {
-    const response = await request(app)
-      .get("/tasks")
-      .set("Authorization", `Bearer ${userToken}`);
+    const response = await request(app).get("/tasks").set("Authorization", `Bearer ${userToken}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([]);
   });
 
   it("allows an authenticated admin", async () => {
-    const response = await request(app)
-      .get("/tasks")
-      .set("Authorization", `Bearer ${adminToken}`);
+    const response = await request(app).get("/tasks").set("Authorization", `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([]);

@@ -1,4 +1,3 @@
-
 export interface Task {
   id: number;
   title: string;
@@ -12,7 +11,7 @@ export interface CreateTaskBody {
   description: string;
 }
 
-export interface TaskParams  {
+export interface TaskParams {
   id: string;
 }
 

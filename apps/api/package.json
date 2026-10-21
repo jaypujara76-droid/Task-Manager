@@ -1,4 +1,3 @@
-
 {
   "name": "@task-manager/api",
   "version": "1.0.0",
@@ -11,7 +10,8 @@
     "test": "vitest run",
     "db:generate": "prisma generate --config prisma7.config.ts",
     "db:migrate": "prisma migrate dev --config prisma7.config.ts",
-    "db:seed": "prisma db seed --config prisma7.config.ts"
+    "db:seed": "prisma db seed --config prisma7.config.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

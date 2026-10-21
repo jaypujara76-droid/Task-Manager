@@ -3,11 +3,7 @@ import { ZodType } from "zod";
 import { BadRequestError } from "../errors/BadRequestError.js";
 
 export const validateBody = (schema: ZodType) => {
-  return (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
