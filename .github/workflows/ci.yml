@@ -14,7 +14,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Jaydeep@07
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: task_manager
         ports:
           - 5432:5432
@@ -25,7 +25,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://postgres:Jaydeep@07@localhost:5432/task_manager
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/task_manager
 
     steps:
       - name: Checkout repository
@@ -69,3 +69,5 @@ jobs:
 
       - name: Build frontend
         run: pnpm --filter web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
