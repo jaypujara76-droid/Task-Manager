@@ -1,4 +1,6 @@
-export type Role = "admin" | "user";
+import type { UserRole } from "@task-manager/shared";
+
+export type Role = UserRole;
 
 export interface User {
   id: number;

@@ -13,19 +13,19 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpassword
-          POSTGRES_DB: task_manager_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: Jaydeep@07
+          POSTGRES_DB: task_manager
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U testuser -d task_manager_test"
+          --health-cmd "pg_isready -U postgres -d task_manager"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/task_manager_test
+      DATABASE_URL: postgresql://postgres:Jaydeep@07@localhost:5432/task_manager
 
     steps:
       - name: Checkout repository

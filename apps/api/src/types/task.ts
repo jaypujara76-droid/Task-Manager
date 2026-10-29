@@ -1,28 +1,12 @@
-export interface Task {
-  id: number;
-  title: string;
-  description: string;
-  completed: boolean;
-  ownerId: number;
-}
+import type {
+  Task,
+  CreateTaskInput,
+  ReplaceTaskInput,
+  UpdateTaskInput,
+} from "@task-manager/shared";
 
-export interface CreateTaskBody {
-  title: string;
-  description: string;
-}
+export type { Task, CreateTaskInput, ReplaceTaskInput, UpdateTaskInput };
 
 export interface TaskParams {
   id: string;
-}
-
-export interface UpdateTaskBody {
-  title: string;
-  description: string;
-  completed: boolean;
-}
-
-export interface PatchTaskBody {
-  title?: string;
-  description?: string;
-  completed?: boolean;
 }

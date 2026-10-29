@@ -5,6 +5,7 @@ import request from "supertest";
 const prismaMocks = vi.hoisted(() => ({
   findUserUnique: vi.fn(),
   findTasks: vi.fn(),
+  countTasks: vi.fn(),
 }));
 
 vi.mock("../lib/prisma.js", () => ({
@@ -14,11 +15,14 @@ vi.mock("../lib/prisma.js", () => ({
     },
     task: {
       findMany: prismaMocks.findTasks,
+      count: prismaMocks.countTasks,
     },
   },
 }));
 
-process.env.JWT_SECRET = "test-secret";
+process.env.NODE_ENV ??= "test";
+process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/task_manager_test";
+process.env.JWT_SECRET ??= "test-secret";
 
 const app = (await import("../app.js")).default;
 const userToken = jwt.sign({ userId: 1, username: "jay", role: "user" }, process.env.JWT_SECRET);
@@ -38,6 +42,7 @@ beforeEach(() => {
       users.find((user) => user.id === where.id) ?? null,
   );
   prismaMocks.findTasks.mockResolvedValue([]);
+  prismaMocks.countTasks.mockResolvedValue(0);
 });
 
 describe("Task API Authentication", () => {
@@ -57,13 +62,29 @@ describe("Task API Authentication", () => {
     const response = await request(app).get("/tasks").set("Authorization", `Bearer ${userToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual([]);
+    expect(response.body).toEqual({
+      data: [],
+      pagination: {
+        page: 1,
+        limit: 10,
+        totalTasks: 0,
+        totalPages: 0,
+      },
+    });
   });
 
   it("allows an authenticated admin", async () => {
     const response = await request(app).get("/tasks").set("Authorization", `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual([]);
+    expect(response.body).toEqual({
+      data: [],
+      pagination: {
+        page: 1,
+        limit: 10,
+        totalTasks: 0,
+        totalPages: 0,
+      },
+    });
   });
 });

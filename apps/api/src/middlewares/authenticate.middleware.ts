@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
 import { Role } from "../types/user.js";
-
+import { env } from "../config/env.js";
 interface JwtPayload {
   userId: number;
   username: string;
@@ -44,17 +44,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const secret = process.env.JWT_SECRET;
-
-    if (!secret) {
-      console.error("JWT_SECRET is not configured");
-
-      return res.status(500).json({
-        message: "Internal Server Error",
-      });
-    }
-
-    const decoded: unknown = jwt.verify(token, secret);
+    const decoded: unknown = jwt.verify(token, env.JWT_SECRET);
 
     if (!isJwtPayload(decoded)) {
       return res.status(401).json({

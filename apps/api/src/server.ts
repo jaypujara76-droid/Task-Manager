@@ -8,9 +8,10 @@ dotenv.config({
   path: resolve(currentDir, "../../../.env"),
 });
 
-const { default: app } = await import("./app.js");
-const port = Number(process.env.PORT ?? 3001);
+const { env } = await import("./config/env.js");
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+const { default: app } = await import("./app.js");
+
+app.listen(env.PORT, () => {
+  console.log(`Server listening on port ${env.PORT}`);
 });

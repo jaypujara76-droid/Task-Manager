@@ -11,7 +11,15 @@ type Task = {
   completed: boolean;
   ownerId: number;
 };
-
+type PaginatedTasksResponse = {
+  data: Task[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalTasks: number;
+    totalPages: number;
+  };
+};
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -63,8 +71,9 @@ export default function DashboardPage() {
     try {
       setError("");
 
-      const data = await apiRequest<Task[]>("/tasks", {}, token);
-      setTasks(data);
+      const result = await apiRequest<PaginatedTasksResponse>("/tasks", {}, token);
+
+      setTasks(result.data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to load tasks";
 

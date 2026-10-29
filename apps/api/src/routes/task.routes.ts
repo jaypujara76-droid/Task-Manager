@@ -1,6 +1,10 @@
 import { Router } from "express";
 
-import { createTaskSchema, updateTaskSchema } from "../schemas/task.schema.js";
+import {
+  createTaskInputSchema,
+  replaceTaskInputSchema,
+  updateTaskInputSchema,
+} from "@task-manager/shared";
 
 import { validateBody } from "../middlewares/validate.middleware.js";
 import { NotFoundError } from "../errors/NotFoundError.js";
@@ -13,28 +17,42 @@ const router = Router();
 
 router.use(authenticate);
 
-/*
-|--------------------------------------------------------------------------
-| GET /tasks
-|--------------------------------------------------------------------------
-| Admin  -> all tasks
-| User   -> only own tasks
-|--------------------------------------------------------------------------
-*/
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const currentUser = req.user!;
 
-    const tasks = await prisma.task.findMany({
-      where:
-        currentUser.role === "admin"
-          ? {}
-          : {
-              userId: currentUser.userId,
-            },
-    });
+    // 1. Read pagination values from query parameters
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
 
+    // 2. Calculate how many tasks to skip
+    const skip = (page - 1) * limit;
+
+    // 3. Apply the existing role-based filter
+    const where =
+      currentUser.role === "admin"
+        ? {}
+        : {
+            userId: currentUser.userId,
+          };
+
+    // 4. Fetch the current page and count matching tasks
+    const [tasks, totalTasks] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          id: "asc",
+        },
+      }),
+      prisma.task.count({
+        where,
+      }),
+    ]);
+
+    // 5. Keep your existing response mapping
     const response = tasks.map((task) => ({
       id: task.id,
       title: task.title,
@@ -43,18 +61,18 @@ router.get(
       ownerId: task.userId,
     }));
 
-    res.status(200).json(response);
+    // 6. Return tasks with pagination metadata
+    res.status(200).json({
+      data: response,
+      pagination: {
+        page,
+        limit,
+        totalTasks,
+        totalPages: Math.ceil(totalTasks / limit),
+      },
+    });
   }),
 );
-
-/*
-|--------------------------------------------------------------------------
-| GET /tasks/:id
-|--------------------------------------------------------------------------
-| Admin  -> can access any task
-| User   -> can access only own task
-|--------------------------------------------------------------------------
-*/
 
 router.get(
   "/:id",
@@ -90,17 +108,9 @@ router.get(
   }),
 );
 
-/*
-|--------------------------------------------------------------------------
-| POST /tasks
-|--------------------------------------------------------------------------
-| Task ownership comes from authenticated user.
-|--------------------------------------------------------------------------
-*/
-
 router.post(
   "/",
-  validateBody(createTaskSchema),
+  validateBody(createTaskInputSchema),
   asyncHandler(async (req, res) => {
     const currentUser = req.user!;
 
@@ -126,18 +136,9 @@ router.post(
   }),
 );
 
-/*
-|--------------------------------------------------------------------------
-| PUT /tasks/:id
-|--------------------------------------------------------------------------
-| Admin  -> can update any task
-| User   -> can update only own task
-|--------------------------------------------------------------------------
-*/
-
 router.put(
   "/:id",
-  validateBody(updateTaskSchema),
+  validateBody(replaceTaskInputSchema),
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const currentUser = req.user!;
@@ -189,17 +190,9 @@ router.put(
   }),
 );
 
-/*
-|--------------------------------------------------------------------------
-| PATCH /tasks/:id
-|--------------------------------------------------------------------------
-| Admin  -> can update any task
-| User   -> can update only own task
-|--------------------------------------------------------------------------
-*/
-
 router.patch(
   "/:id",
+  validateBody(updateTaskInputSchema),
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const currentUser = req.user!;
@@ -255,15 +248,6 @@ router.patch(
     res.status(200).json(response);
   }),
 );
-
-/*
-|--------------------------------------------------------------------------
-| DELETE /tasks/:id
-|--------------------------------------------------------------------------
-| Admin  -> can delete any task
-| User   -> can delete only own task
-|--------------------------------------------------------------------------
-*/
 
 router.delete(
   "/:id",
