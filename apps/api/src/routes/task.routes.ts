@@ -4,13 +4,14 @@ import {
   createTaskInputSchema,
   replaceTaskInputSchema,
   updateTaskInputSchema,
+  taskQuerySchema,
 } from "@task-manager/shared";
 
 import { validateBody } from "../middlewares/validate.middleware.js";
 import { NotFoundError } from "../errors/NotFoundError.js";
 import { authenticate } from "../middlewares/authenticate.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-
+import { BadRequestError } from "../errors/BadRequestError.js";
 import prisma from "../lib/prisma.js";
 
 const router = Router();
@@ -22,38 +23,70 @@ router.get(
   asyncHandler(async (req, res) => {
     const currentUser = req.user!;
 
-    // 1. Read pagination values from query parameters
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+    // Validate query parameters using Zod
+    const result = taskQuerySchema.safeParse(req.query);
 
-    // 2. Calculate how many tasks to skip
-    const skip = (page - 1) * limit;
+    if (!result.success) {
+      throw new BadRequestError("Invalid query parameters", result.error.flatten());
+    }
 
-    // 3. Apply the existing role-based filter
-    const where =
-      currentUser.role === "admin"
-        ? {}
-        : {
-            userId: currentUser.userId,
-          };
+    const { status, cursor, limit } = result.data;
 
-    // 4. Fetch the current page and count matching tasks
-    const [tasks, totalTasks] = await Promise.all([
+    // Base condition for role-based access control
+    const userWhere = {
+      ...(currentUser.role !== "admin" && {
+        userId: currentUser.userId,
+      }),
+    };
+
+    // Apply status filtering and cursor pagination
+    const where = {
+      ...userWhere,
+
+      ...(status !== undefined && {
+        completed: status === "completed",
+      }),
+
+      ...(cursor !== undefined && {
+        id: {
+          gt: cursor,
+        },
+      }),
+    };
+
+    // Fetch paginated tasks and summary counts in parallel
+    const [tasks, totalTasks, completedTasks] = await Promise.all([
+      // Fetch one extra task to check whether another page exists
       prisma.task.findMany({
         where,
-        skip,
-        take: limit,
+        take: limit + 1,
         orderBy: {
           id: "asc",
         },
       }),
+
+      // Count all tasks belonging to the current user
       prisma.task.count({
-        where,
+        where: userWhere,
+      }),
+
+      // Count all completed tasks belonging to the current user
+      prisma.task.count({
+        where: {
+          ...userWhere,
+          completed: true,
+        },
       }),
     ]);
 
-    // 5. Keep your existing response mapping
-    const response = tasks.map((task) => ({
+    // Determine whether another page exists
+    const hasMore = tasks.length > limit;
+
+    // Remove the extra record
+    const paginatedTasks = hasMore ? tasks.slice(0, limit) : tasks;
+
+    // Map Prisma records to API response format
+    const response = paginatedTasks.map((task) => ({
       id: task.id,
       title: task.title,
       description: task.description ?? "",
@@ -61,15 +94,21 @@ router.get(
       ownerId: task.userId,
     }));
 
-    // 6. Return tasks with pagination metadata
+    // Generate the next cursor
+    const lastTask = paginatedTasks.at(-1);
+
+    const nextCursor = hasMore && lastTask ? String(lastTask.id) : null;
+
+    // Calculate remaining tasks
+    const remainingTasks = totalTasks - completedTasks;
+
+    // Return paginated tasks and global summary counts
     res.status(200).json({
       data: response,
-      pagination: {
-        page,
-        limit,
-        totalTasks,
-        totalPages: Math.ceil(totalTasks / limit),
-      },
+      nextCursor,
+      totalTasks,
+      completedTasks,
+      remainingTasks,
     });
   }),
 );

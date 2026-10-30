@@ -13,23 +13,25 @@ type Task = {
 };
 type PaginatedTasksResponse = {
   data: Task[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalTasks: number;
-    totalPages: number;
-  };
+  nextCursor: string | null;
+  totalTasks: number;
+  completedTasks: number;
+  remainingTasks: number;
 };
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -39,10 +41,11 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
+  const [totalTasks, setTotalTasks] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [remainingCount, setRemainingCount] = useState(0);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const completedCount = tasks.filter((task) => task.completed).length;
 
   const filteredTasks = tasks
     .filter((task) => {
@@ -60,37 +63,89 @@ export default function DashboardPage() {
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => (sortOrder === "newest" ? b.id - a.id : a.id - b.id));
-  const loadTasks = useCallback(async () => {
-    const token = sessionStorage.getItem("token");
 
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
+  const loadTasks = useCallback(
+    async (cursor?: string, isNavigation = false) => {
+      const token = sessionStorage.getItem("token");
 
-    try {
-      setError("");
-
-      const result = await apiRequest<PaginatedTasksResponse>("/tasks", {}, token);
-
-      setTasks(result.data);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load tasks";
-
-      if (
-        message.toLowerCase().includes("unauthorized") ||
-        message.toLowerCase().includes("token")
-      ) {
-        sessionStorage.removeItem("token");
+      if (!token) {
         router.replace("/login");
         return;
       }
 
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
+      try {
+        setError("");
+
+        if (isNavigation) {
+          setLoadingMore(true);
+        }
+
+        const params = new URLSearchParams({
+          limit: "10",
+        });
+
+        if (cursor) {
+          params.set("cursor", cursor);
+        }
+
+        const result = await apiRequest<PaginatedTasksResponse>(
+          `/tasks?${params.toString()}`,
+          {},
+          token,
+        );
+        setTotalTasks(result.totalTasks);
+        setCompletedCount(result.completedTasks);
+        setRemainingCount(result.remainingTasks);
+        // Replace the current page instead of appending tasks.
+        setTasks(result.data);
+        setNextCursor(result.nextCursor);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to load tasks";
+
+        if (
+          message.toLowerCase().includes("unauthorized") ||
+          message.toLowerCase().includes("token")
+        ) {
+          sessionStorage.removeItem("token");
+          router.replace("/login");
+          return;
+        }
+
+        setError(message);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [router],
+  );
+  const refreshCurrentPage = async () => {
+    const currentCursor = cursorHistory[currentPage - 1];
+
+    await loadTasks(currentCursor ?? undefined);
+  };
+
+  function handleNextPage() {
+    if (!nextCursor || loadingMore) return;
+
+    const cursorForNextPage = nextCursor;
+
+    setCursorHistory((previous) => [...previous.slice(0, currentPage), cursorForNextPage]);
+
+    setCurrentPage((previous) => previous + 1);
+
+    void loadTasks(cursorForNextPage, true);
+  }
+
+  function handlePreviousPage() {
+    if (currentPage <= 1 || loadingMore) return;
+
+    const previousCursor = cursorHistory[currentPage - 2];
+
+    setCurrentPage((previous) => previous - 1);
+
+    void loadTasks(previousCursor ?? undefined, true);
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -114,7 +169,7 @@ export default function DashboardPage() {
       setSaving(true);
       setError("");
 
-      const newTask = await apiRequest<Task>(
+      await apiRequest<Task>(
         "/tasks",
         {
           method: "POST",
@@ -126,7 +181,7 @@ export default function DashboardPage() {
         token,
       );
 
-      setTasks((previousTasks) => [...previousTasks, newTask]);
+      await refreshCurrentPage();
       setTitle("");
       setDescription("");
     } catch (err) {
@@ -148,7 +203,7 @@ export default function DashboardPage() {
     try {
       setError("");
 
-      const updatedTask = await apiRequest<Task>(
+      await apiRequest<Task>(
         `/tasks/${task.id}`,
         {
           method: "PATCH",
@@ -159,9 +214,7 @@ export default function DashboardPage() {
         token,
       );
 
-      setTasks((previousTasks) =>
-        previousTasks.map((item) => (item.id === updatedTask.id ? updatedTask : item)),
-      );
+      await refreshCurrentPage();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update task");
     }
@@ -183,7 +236,7 @@ export default function DashboardPage() {
 
       await apiRequest(`/tasks/${taskToDelete}`, { method: "DELETE" }, token);
 
-      setTasks((previousTasks) => previousTasks.filter((task) => task.id !== taskToDelete));
+      await refreshCurrentPage();
 
       if (editingTaskId === taskToDelete) {
         cancelEditing();
@@ -231,7 +284,7 @@ export default function DashboardPage() {
 
       const currentTask = tasks.find((task) => task.id === editingTaskId);
 
-      const updatedTask = await apiRequest<Task>(
+      await apiRequest<Task>(
         `/tasks/${editingTaskId}`,
         {
           method: "PUT",
@@ -244,9 +297,7 @@ export default function DashboardPage() {
         token,
       );
 
-      setTasks((previousTasks) =>
-        previousTasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)),
-      );
+      await refreshCurrentPage();
 
       cancelEditing();
     } catch (err) {
@@ -296,11 +347,11 @@ export default function DashboardPage() {
           aria-label="Task summary"
           className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4"
         >
-          <SummaryCard label="Total tasks" value={tasks.length} />
+          <SummaryCard label="Total tasks" value={totalTasks} />
 
           <SummaryCard label="Completed" value={completedCount} />
 
-          <SummaryCard label="Remaining" value={tasks.length - completedCount} />
+          <SummaryCard label="Remaining" value={remainingCount} />
         </section>
 
         {/* Error Message */}
@@ -516,6 +567,28 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+          {/* Pagination Controls */}
+          <div className="mt-6 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1 || loadingMore}
+              className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              &lt; Previous
+            </button>
+
+            <span className="text-sm font-medium text-slate-600">Page {currentPage}</span>
+
+            <button
+              type="button"
+              onClick={handleNextPage}
+              disabled={nextCursor === null || loadingMore}
+              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {loadingMore ? "Loading..." : "Next >"}
+            </button>
+          </div>
         </section>
       </div>
 

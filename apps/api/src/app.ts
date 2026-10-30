@@ -29,8 +29,9 @@ app.use("/login", loginLimiter);
 
 // Routes
 app.use(healthRouter);
-app.use(authRouter);
-app.use("/tasks", taskRouter);
+
+app.use("/api/v1", authRouter);
+app.use("/api/v1/tasks", taskRouter);
 
 // Error handling (after routes)
 app.use(errorHandler);
